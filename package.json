@@ -1,0 +1,30 @@
+{
+  "name": "dynamic.io",
+  "version": "0.0.1",
+  "description": "socket.io server subclass for dynamic hosts and namespaces",
+  "keywords": [
+    "dynamic",
+    "virtual",
+    "host",
+    "namespace",
+    "realtime",
+    "socket",
+    "io"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/PencilCode/dynamic.io"
+  },
+  "dependencies": {
+    "socket.io": "~1.2.0",
+    "socket.io-parser": "~2.2.2",
+    "socket.io-adapter": "~0.3.1",
+    "debug": "~0.7.4"
+  },
+  "contributors": [
+    {
+      "name": "David Bau",
+      "email": "david.bau@gmail.com"
+    }
+  ]
+}
