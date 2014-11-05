@@ -71,7 +71,8 @@ DynamicServer.prototype.setupNamespace = function(pattern, fn) {
   // If there is a matching namespace already, then set it up.
   if (pattern == '*' || this.nsps[pattern]) {
     for (var j in this.nsps) {
-      if (this.nsps.hasOwnProperty(j) && (pattern == '*' || pattern == j)) {
+      if (this.nsps.hasOwnProperty(j) && (pattern == j ||
+          (pattern == '*' && !this.namespaceSetup.hasOwnProperty(j)))) {
         var nsp = this.nsps[j];
         fn(nsp);
       }
