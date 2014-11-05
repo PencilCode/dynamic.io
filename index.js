@@ -68,6 +68,15 @@ exports.DynamicServer = DynamicServer;
 // This is the setup for initializing dynamic namespaces.
 DynamicServer.prototype.setupNamespace = function(pattern, fn) {
   this.namespaceSetup[pattern] = fn;
+  // If there is a matching namespace already, then set it up.
+  if (pattern == '*' || this.nsps[pattern]) {
+    for (var j in this.nsps) {
+      if (this.nsps.hasOwnProperty(j) && (pattern == '*' || pattern == j)) {
+        var nsp = this.nsps[j];
+        fn(nsp);
+      }
+    }
+  }
 }
 
 // Create DynamicClient instead of IOClient when there is a connection.
