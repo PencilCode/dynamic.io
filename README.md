@@ -1,6 +1,8 @@
 dynamic.io
 ==========
 
+[![npm version](https://badge.fury.io/js/dynamic.io.svg)](http://badge.fury.io/js/dynamic.io)
+
 dynamic.io is a subclass of the socket.io server that
 knows how to deal with multiple hostnames and dynamically
 created namespaces that delete themselves when idle.
@@ -11,11 +13,12 @@ This subclass should also be perfectly usable as a standard.io server,
 in the ordinary way.  But it supports a few more options as well
 as the "setupNamespace" method for handling namespace callbacks.
 
-The key new entrypoint for users is "setupNamespace", which
+Dynamic namespaces can be set up using "setupNamespace", which
 accepts a namespace name (or '*' for any-namespace) and
 a callback that can initialize a (passed) namespace instance
-when it is dynamically created.  Return false from this
-callback to reject the namespace.
+when it is dynamically created.  (Or, if it's pre-existing
+at setupNamespace time.)  Return false from this callback to
+reject the namespace.
 
 New options include:
  * mainHost (default '*') - set to a hostname if you want
