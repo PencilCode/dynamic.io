@@ -1,6 +1,6 @@
 {
   "name": "dynamic.io",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "socket.io server subclass for dynamic hosts and namespaces",
   "keywords": [
     "dynamic",
