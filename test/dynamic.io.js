@@ -42,31 +42,7 @@ describe('dynamic.io', function(){
     });
     it('should allow getHost override', function(done){
       var srv = http();
-      var sio = io(srv);
-      var total = 2;
-      var basename = '';
-      // Override getHost to strip port.
-      sio.getHost = function(conn) {
-        return conn.request.headers.host.replace(/:\d+$/, '');
-      }
-      sio.setupNamespace(/.*first/, function(nsp) {
-        expect(nsp.fullname()).to.be(basename + '/first');
-        --total || done();
-      });
-      sio.setupNamespace(/.*second/, function(nsp) {
-        expect(nsp.fullname()).to.be('//localhost/second');
-        --total || done();
-      });
-      srv.listen(function() {
-        var addr = srv.address();
-        basename = '//' + addr.address;
-        client(srv, '/first');
-        client('http://localhost:' + addr.port + '/second');
-      });
-    });
-    it('should allow getHost override', function(done){
-      var srv = http();
-      var sio = io(srv);
+      var sio = io(srv, { host: true });
       var total = 2;
       var basename = '';
       // Override getHost to strip port.

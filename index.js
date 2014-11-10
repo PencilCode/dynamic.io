@@ -110,6 +110,10 @@ DynamicServer.prototype.setupNamespace = function(name, fn) {
 // Create DynamicClient instead of IOClient when there is a connection.
 DynamicServer.prototype.onconnection = function(conn) {
   var host = this.getHost(conn);
+  if (!host || matchPattern(this._mainHost, host)) {
+    // The main host gets nulled out.
+    host = null;
+  }
   var client = new DynamicClient(this, conn, host);
   client.connect('/');
   return this;
@@ -117,10 +121,6 @@ DynamicServer.prototype.onconnection = function(conn) {
 
 // Allow users to override this in order to normalize hostnames.
 DynamicServer.prototype.getHost = function(conn) {
-  if (matchPattern(this._mainHost, conn.request.headers.host)) {
-    // The main host gets nulled out.
-    return null;
-  }
   return conn.request.headers.host;
 };
 
