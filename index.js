@@ -13,8 +13,8 @@ when it is dynamically created.  Return false from this
 callback to reject the namespace.
 
 New options include:
- * mainHost (default '*') - set to a hostname if you want
-   to differentiate between hosts.
+ * host (default '*') - set to specific host (or regexp) you
+   want to map to '/' if you want to treat other hosts differently.
  * publicStatus (default false) - set to true to serve a debugging
    page on socket.io/status
  * retirement (default 10000) - the number of milliseconds
