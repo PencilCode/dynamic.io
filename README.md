@@ -1,35 +1,38 @@
 dynamic.io
 ==========
-
-[![npm version](https://badge.fury.io/js/dynamic.io.svg)](http://badge.fury.io/js/dynamic.io)
+[![Build Status](https://travis-ci.org/PencilCode/dynamic.io.svg?branch=master)](https://travis-ci.org/PencilCode/dynamic.io)
+[![NPM version](https://badge.fury.io/js/dynamic.io.svg)](http://badge.fury.io/js/dynamic.io)
 
 dynamic.io is a subclass of the socket.io server that
 knows how to deal with multiple hostnames and dynamically
 created namespaces that delete themselves when idle.
+It works with the standard socket.io client.
 
 It also provides an optional socket.io/status page for debugging.
 
-This subclass should also be perfectly usable as a standard.io server,
-in the ordinary way.  But it supports a few more options as well
-as the "setupNamespace" method for handling namespace callbacks.
+This subclass is perfectly usable as a standard socket.io server,
+in the ordinary way (it passes socket.io unit tests, for example).
+But it supports a few more options as well as the "setupNamespace"
+method for handling namespace callbacks.
 
 Dynamic namespaces can be set up using "setupNamespace", which
-accepts a namespace name (or '*' for any-namespace) and
-a callback that can initialize a (passed) namespace instance
-when it is dynamically created.  (Or, if it's pre-existing
-at setupNamespace time.)  Return false from this callback to
-reject the namespace.
+accepts a namespace name (or /.*/ for any-namespace, or any other
+regexp to match regexps) and a callback that can initialize
+a (passed) namespace instance when it is dynamically created.
+(Or, if it's pre-existing at setupNamespace time.)  Return
+false from this callback to reject the namespace.
 
 New options include:
- * mainHost (default '*') - set to a hostname if you want
-   to differentiate between hosts.
+ * host (default /.*/) - set to the host name (or regexp) to direct
+   to "/"; all other hosts will direct to namespaces "//host/namespace".
+   To send all connections to fully qualified namespaces, set host:true.
  * publicStatus (default false) - set to true to serve a debugging
    page on socket.io/status
  * retirement (default 10000) - the number of milliseconds
    to wait after a namespace becomes empty until starting
    to consider deleting it.
 
-If you find this useful, please contribute tests and fixes.
+If you find this useful, please contribute test, documentation, and fixes.
 
 A usage example:
 

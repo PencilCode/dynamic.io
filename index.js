@@ -40,10 +40,9 @@ function fullNamespaceName(name, host) {
 }
 
 function makePattern(pattern) {
-  if (pattern == '*') return new RegExp('.*');
-  // All special regexp characters other than . signal a regexp.
-  // If your regexp wouldn't trigger, then surround with (?:).
-  if (/[*?+\\\[\]{}\^$()|]/.test(pattern)) return new RegExp(pattern);
+  if (pattern === true) return new RegExp('.^');  // matches nothing.
+  if (pattern === '*') return new RegExp('.*');
+  if (pattern instanceof RegExp) return pattern;
   return pattern;
 }
 
@@ -70,7 +69,7 @@ function DynamicServer(srv, opts) {
   this._namepacePatterns = [];
 
   // By default, serve all hosts as if they are the main host.
-  this._mainHost = makePattern(options._mainHost || '*');
+  this._mainHost = makePattern(options.host || '*');
 
   // By default, retire automatically created namespaces in 10 seconds.
   this._defaultRetirement = options.retirement || 10000;

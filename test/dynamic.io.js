@@ -12,16 +12,106 @@ function client(srv, nsp, opts){
     opts = nsp;
     nsp = null;
   }
-  var addr = srv.address();
-  if (!addr) addr = srv.listen().address();
-  var url = 'ws://' + addr.address + ':' + addr.port + (nsp || '');
+  var url;
+  if ('string' == typeof srv) {
+    url = srv + (nsp || '');
+  } else {
+    var addr = srv.address();
+    if (!addr) addr = srv.listen().address();
+    url = 'ws://' + addr.address + ':' + addr.port + (nsp || '');
+  }
   return ioc(url, opts);
 }
 
 describe('dynamic.io', function(){
+  describe('hosts', function() {
+    it('should add //host:port when host is true', function(done){
+      var srv = http();
+      var sio = io(srv, { host: true });
+      var total = 1;
+      var basename = '';
+      sio.setupNamespace(/.*first/, function(nsp) {
+        expect(nsp.fullname()).to.be(basename + '/first');
+        --total || done();
+      });
+      srv.listen(function() {
+        var addr = srv.address();
+        basename = '//' + addr.address + ':' + addr.port;
+        client(srv, '/first');
+      });
+    });
+    it('should allow getHost override', function(done){
+      var srv = http();
+      var sio = io(srv);
+      var total = 2;
+      var basename = '';
+      // Override getHost to strip port.
+      sio.getHost = function(conn) {
+        return conn.request.headers.host.replace(/:\d+$/, '');
+      }
+      sio.setupNamespace(/.*first/, function(nsp) {
+        expect(nsp.fullname()).to.be(basename + '/first');
+        --total || done();
+      });
+      sio.setupNamespace(/.*second/, function(nsp) {
+        expect(nsp.fullname()).to.be('//localhost/second');
+        --total || done();
+      });
+      srv.listen(function() {
+        var addr = srv.address();
+        basename = '//' + addr.address;
+        client(srv, '/first');
+        client('http://localhost:' + addr.port + '/second');
+      });
+    });
+    it('should allow getHost override', function(done){
+      var srv = http();
+      var sio = io(srv);
+      var total = 2;
+      var basename = '';
+      // Override getHost to strip port.
+      sio.getHost = function(conn) {
+        return conn.request.headers.host.replace(/:\d+$/, '');
+      }
+      sio.setupNamespace(/.*first/, function(nsp) {
+        expect(nsp.fullname()).to.be(basename + '/first');
+        --total || done();
+      });
+      sio.setupNamespace(/.*second/, function(nsp) {
+        expect(nsp.fullname()).to.be('//localhost/second');
+        --total || done();
+      });
+      srv.listen(function() {
+        var addr = srv.address();
+        basename = '//' + addr.address;
+        client(srv, '/first');
+        client('http://localhost:' + addr.port + '/second');
+      });
+    });
+    it('should support host pattern', function(done){
+      var srv = http();
+      var sio = io(srv, { host: /^\d/ });
+      var total = 2;
+      var localname = '';
+      sio.setupNamespace(/.*first/, function(nsp) {
+        expect(nsp.fullname()).to.be('/first');
+        --total || done();
+      });
+      sio.setupNamespace(/.*second/, function(nsp) {
+        expect(nsp.fullname()).to.be(localname + '/second');
+        --total || done();
+      });
+      srv.listen(function() {
+        var addr = srv.address();
+        localname = '//localhost:' + addr.port;
+        client(srv, '/first');
+        client('http://localhost:' + addr.port + '/second');
+      });
+    });
+  });
+
   describe('namespaces', function(){
     var Socket = io.DynamicSocket;
-    var Namespace = io.DynamicNamespace;
     it('should set up / with *', function(done){
       var srv = http();
       var sio = io(srv);
@@ -49,7 +139,7 @@ describe('dynamic.io', function(){
       var sio = io(srv);
       var setup = 2;
       var connect = [];
-      sio.setupNamespace('^.*\/([^/]*)$', function(nsp, match){
+      sio.setupNamespace(/^.*\/([^\/]*)$/, function(nsp, match){
         expect(match).to.eql(
           setup == 2 ? {'0': '/', '1': '', index: 0, input: '/'} :
           setup == 1 ? {'0':'/d/sec', '1': 'sec', index: 0, input: '/d/sec'} :
@@ -82,7 +172,7 @@ describe('dynamic.io', function(){
       var srv = http();
       var sio = io(srv);
       var connect = 1;
-      sio.setupNamespace('^/dyn/([^/]*)$', function(nsp, match){
+      sio.setupNamespace(/^\/dyn\/([^\/]*)$/, function(nsp, match){
         expect(nsp).not.to.be(sio.sockets);
         expect(nsp.name).to.be('/dyn/a');
         expect(match[1]).to.be('a');
@@ -116,11 +206,11 @@ describe('dynamic.io', function(){
         setup.push('ex2:' + nsp.name);
         --steps || finish();
       });
-      sio.setupNamespace('^/special.*$', function(nsp, match){
+      sio.setupNamespace(/^\/special.*$/, function(nsp, match){
         setup.push('wc1:' + nsp.name);
         --steps || finish();
       });
-      sio.setupNamespace('^/.*debug$', function(nsp, match){
+      sio.setupNamespace(/^\/.*debug$/, function(nsp, match){
         setup.push('wc2:' + nsp.name);
         --steps || finish();
       });
@@ -161,7 +251,7 @@ describe('dynamic.io', function(){
         setup.push('ex2:' + nsp.name);
         --steps || finish();
       });
-      sio.setupNamespace('^/.*h.*$', function(nsp, match){
+      sio.setupNamespace(/^\/.*h.*$/, function(nsp, match){
         setup.push('wc:' + nsp.name);
         --steps || finish();
       });
@@ -189,7 +279,7 @@ describe('dynamic.io', function(){
       var sio = io(srv, {retirement:1});
       var steps = 7;
       var setup = [];
-      sio.setupNamespace('^/dyn/.*$', function(nsp, match){
+      sio.setupNamespace(/^\/dyn\/.*$/, function(nsp, match){
         setup.push('setup:' + nsp.name);
         --steps || finish();
         nsp.on('connect', function(socket) {
