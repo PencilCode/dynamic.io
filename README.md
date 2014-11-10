@@ -37,15 +37,16 @@ If you find this useful, please contribute test, documentation, and fixes.
 A usage example:
 
 <pre>
-// Specify mainHost in options if you want to handle virtual hosts.
-// Then only connections with a Host header matching mainHost will
-// map to "/".  (The default is '*', which maps all hosts to '/').
-// All other host namespaces will get a prefix of "//otherhost.com".
-// The Namespace method nsp.fullname() gets the fully qualified
-// namespace name. nsp.host returns the host, and nsp.name still
-// returns just '/' (or '/mynamespace') without the host.
+// Specify host in options if you want to handle virtual hosts.
+// Then only connections with a Host header matching host will
+// map to "/".  (The default is /.*/, which maps all hosts to '/';
+// host can be a string or a RegExp).  All other host namespaces
+// will get a prefix of "//otherhost.com".  The Namespace method
+// nsp.fullname() gets the fully qualified namespace name, while
+// and nsp.name still // returns just '/' (or '/mynamespace')
+// without the host; nsp.host returns the host.
 
-io = require('dynamic.io')({mainHost: 'myhost.com'});
+io = require('dynamic.io')({host: 'myhost.com'});
 
 // By the way, you can override gethost if you need to normalize.
 io.getHost = function(conn) {
