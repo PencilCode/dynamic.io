@@ -19,9 +19,9 @@ function client(srv, nsp, opts){
   return ioc(url, opts);
 }
 
-describe('dynamic.io', function(){
+describe('base socket.io', function(){
 
-  it('should use the same scoket.io version as client', function(){
+  it('should use the same socket.io version as client', function(){
     var version = require('socket.io/package').version;
     expect(version).to.be(require('socket.io-client/package').version);
   });

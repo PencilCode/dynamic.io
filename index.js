@@ -51,7 +51,7 @@ function matchPattern(pattern, str) {
   if (pattern instanceof RegExp) {
     return pattern.exec(str);
   } else {
-    return pattern == str ? [str] : null;
+    return pattern == str ? {'0': str, index: 0, input: str} : null;
   }
 }
 
@@ -64,16 +64,16 @@ function DynamicServer(srv, opts) {
   }
   options = options || {};
 
-  this.cleanupTimer = null;
-  this.cleanupTime = null;
-  this.namespaceNames = {};
-  this.namespacePatterns = [];
+  this._cleanupTimer = null;
+  this._cleanupTime = null;
+  this._namepaceNames = {};
+  this._namepacePatterns = [];
 
   // By default, serve all hosts as if they are the main host.
-  this.mainHost = makePattern(options.mainHost || '*');
+  this._mainHost = makePattern(options._mainHost || '*');
 
   // By default, retire automatically created namespaces in 10 seconds.
-  this.defaultRetirement = options.retirement || 10000;
+  this._defaultRetirement = options.retirement || 10000;
 
   // By default, do not expose public /socket.io/status page.
   this._publicStatus = options.publicStatus || false;
@@ -87,9 +87,9 @@ exports.DynamicServer = DynamicServer;
 DynamicServer.prototype.setupNamespace = function(name, fn) {
   var pattern = makePattern(name);
   if (pattern instanceof RegExp) {
-    this.namespacePatterns.push({pattern: pattern, setup: fn});
+    this._namepacePatterns.push({pattern: pattern, setup: fn});
   } else {
-    this.namespaceNames[name] = fn;
+    this._namepaceNames[name] = fn;
   }
   // If there is a matching namespace already, then set it up.
   for (var j in this.nsps) {
@@ -118,7 +118,7 @@ DynamicServer.prototype.onconnection = function(conn) {
 
 // Allow users to override this in order to normalize hostnames.
 DynamicServer.prototype.getHost = function(conn) {
-  if (matchPattern(this.mainHost, conn.request.headers.host)) {
+  if (matchPattern(this._mainHost, conn.request.headers.host)) {
     // The main host gets nulled out.
     return null;
   }
@@ -130,15 +130,15 @@ DynamicServer.prototype.initializeNamespace = function(name, host, auto) {
   // First, look up our instructions for this namespace.
   var fullname = fullNamespaceName(name, host);
   var setup, match;
-  if (this.namespaceNames.hasOwnProperty(fullname)) {
+  if (this._namepaceNames.hasOwnProperty(fullname)) {
     // Prefer exact matches over pattern matches.
-    setup = this.namespaceNames[fullname];
-    match = [fullname];
-  } else for (var j = this.namespacePatterns.length - 1; j >= 0; --j) {
+    setup = this._namepaceNames[fullname];
+    match = {'0': fullname, index: 0, input: fullname};
+  } else for (var j = this._namepacePatterns.length - 1; j >= 0; --j) {
     // Scan patterns starting with the last one registered.
-    match = matchPattern(this.namespacePatterns[j].pattern, exec(fullname));
+    match = matchPattern(this._namepacePatterns[j].pattern, fullname);
     if (match) {
-      setup = this.namespacePatterns[j].setup;
+      setup = this._namepacePatterns[j].setup;
       break;
     }
   }
@@ -151,7 +151,7 @@ DynamicServer.prototype.initializeNamespace = function(name, host, auto) {
   var nsp = new DynamicNamespace(this, name, host);
   // Automatically created namespaces retire automatically.
   if (auto) {
-    nsp.retirement = this.defaultRetirement;
+    nsp.retirement = this._defaultRetirement;
   }
   this.nsps[fullname] = nsp;
   if (setup) {
@@ -180,22 +180,22 @@ DynamicServer.prototype.requestCleanupAfter = function(delay) {
   // If somebody has requested cleanup earlier, we should
   // redo the timer.
   var cleanupTime = delay + +(new Date);
-  if (this.cleanupTimer && cleanupTime < this.cleanupTime) {
-    clearTimeout(this.cleanupTimer);
-    this.cleanupTimer = null;
+  if (this._cleanupTimer && cleanupTime < this._cleanupTime) {
+    clearTimeout(this._cleanupTimer);
+    this._cleanupTimer = null;
   }
 
-  // Don't check directly at the requested time, but later.
+  // Don't check directly at the requested time, but up to 5s later.
   // That way, if a lot of namespaces expire around the same
   // time, we process them as a batch.
-  delay += 5000;
+  delay += Math.max(1, Math.min(delay, 5000));
 
-  if (!this.cleanupTimer) {
+  if (!this._cleanupTimer) {
     var server = this;
-    this.cleanupTime = cleanupTime;
-    this.cleanupTimer = setTimeout(function() {
-      server.cleanupTimer = null;
-      server.cleanupTime = null;
+    this._cleanupTime = cleanupTime;
+    this._cleanupTimer = setTimeout(function() {
+      server._cleanupTimer = null;
+      server._cleanupTime = null;
       server.cleanupExpiredNamespaces();
     }, delay);
   }
@@ -209,8 +209,9 @@ DynamicServer.prototype.cleanupExpiredNamespaces = function() {
   for (var j in this.nsps) {
     if (this.nsps.hasOwnProperty(j)) {
       var nsp = this.nsps[j];
-      var expiration = nsp.expiration();
+      var expiration = nsp._expiration();
       if (expiration <= now) {
+        nsp.expire(true);
         delete this.nsps[j];
       } else  {
         earliestUnexpired = Math.min(earliestUnexpired, expiration);
@@ -272,7 +273,7 @@ DynamicServer.prototype.attachServe = function(srv) {
 DynamicServer.prototype.serveStatus = function(req, res) {
   debug('serve status');
   var match = '*';
-  if (!matchPattern(this.mainHost, req.headers.host)) {
+  if (!matchPattern(this._mainHost, req.headers.host)) {
     match = req.headers.host;
   }
 
@@ -302,7 +303,7 @@ DynamicServer.prototype.serveStatus = function(req, res) {
       html.push('  rooms: ' + nsp.rooms.join(' '));
     }
     if (nsp.sockets.length == 0) {
-      var remaining = nsp.expiration() - now;
+      var remaining = nsp._expiration() - now;
       var expinfo = '';
       if (remaining < Infinity) {
         expinfo = '; expires ' + remaining / 1000 + 's';
@@ -378,7 +379,9 @@ function DynamicNamespace(server, name, host) {
   // when a namespace restarts.
   this.ids = Math.floor(Math.random() * 1000000000);
   // Set the expiration date to never.
-  this.expirationTime = Infinity;
+  this._expirationTime = Infinity;
+  // No expiration callback by default.
+  this._expirationCallbacks = null;
 }
 util.inherits(DynamicNamespace, IONamespace)
 exports.DynamicNamespace = DynamicNamespace;
@@ -391,10 +394,30 @@ DynamicNamespace.prototype.remove = function(socket) {
     // Once a namespace is empty, it goes into a period of retirement,
     // after which it may be deleted.  Set the expiration for 10
     // seconds from now.
-    this.expirationTime = +(new Date) + this.retirement;
+    this._expirationTime = +(new Date) + this.retirement;
     this.server.requestCleanupAfter(this.retirement);
   }
 };
+
+// Set up expire callbacks.
+DynamicNamespace.prototype.expire = function(callback) {
+  if (callback !== true) {
+    if (!this._expirationCallbacks) {
+      this._expirationCallbacks = [];
+    }
+    this._expirationCallbacks.push(callback);
+  } else {
+    // expire(true) is an internal convention for
+    // triggering the expiration callbacks.
+    var callbacks = this._expirationCallbacks;
+    if (callbacks) {
+      this._expirationCallbacks = null;
+      while (callbacks.length > 0) {
+        callbacks.pop().apply(null, [this]);
+      }
+    }
+  }
+}
 
 // Concatenate host and name for the full namespace name.
 DynamicNamespace.prototype.fullname = function() {
@@ -403,15 +426,15 @@ DynamicNamespace.prototype.fullname = function() {
 
 // After there are no sockets, each namespace has an
 // expiration time.
-DynamicNamespace.prototype.expiration = function() {
+DynamicNamespace.prototype._expiration = function() {
   if (this.sockets.length) return Infinity;
-  return this.expirationTime;
+  return this._expirationTime;
 };
 
 // When we have a socket added, we are no longer in retirement,
 // so reset our expirationTime.  Back in business!
 DynamicNamespace.prototype.add = function() {
-  this.expirationTime = Infinity;
+  this._expirationTime = Infinity;
   return IONamespace.prototype.add.apply(this, arguments);
 };
 

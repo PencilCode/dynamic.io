@@ -12,7 +12,7 @@
     "io"
   ],
   "scripts": {
-    "test": "node_modules/.bin/mocha --reporter dot --slow 200ms --bail"
+    "test": "node_modules/.bin/mocha --reporter spec --slow 200ms --bail"
   },
   "repository": {
     "type": "git",
