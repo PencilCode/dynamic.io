@@ -11,6 +11,9 @@
     "socket",
     "io"
   ],
+  "scripts": {
+    "test": "node_modules/.bin/mocha --reporter dot --slow 200ms --bail"
+  },
   "repository": {
     "type": "git",
     "url": "git://github.com/PencilCode/dynamic.io"
@@ -20,6 +23,14 @@
     "socket.io-parser": "~2.2.2",
     "socket.io-adapter": "~0.3.1",
     "debug": "~0.7.4"
+  },
+  "devDependencies": {
+    "mocha": "1.16.2",
+    "expect.js": "0.3.1",
+    "socket.io-client": "1.2.0",
+    "supertest": "0.8.2",
+    "superagent": "0.17.0",
+    "istanbul": "0.2.3"
   },
   "contributors": [
     {

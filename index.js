@@ -28,6 +28,7 @@ var util = require('util'),
     Emitter = require('events').EventEmitter,
     IOServer = require('socket.io'),
     IOClient = require('socket.io/lib/client'),
+    IOSocket = require('socket.io/lib/socket'),
     IONamespace = require('socket.io/lib/namespace'),
     parser = require('socket.io-parser'),
     Adapter = require('socket.io-adapter'),
@@ -36,6 +37,22 @@ var util = require('util'),
 
 function fullNamespaceName(name, host) {
   return host == null ? name : '//' + host + name;
+}
+
+function makePattern(pattern) {
+  if (pattern == '*') return new RegExp('.*');
+  // All special regexp characters other than . signal a regexp.
+  // If your regexp wouldn't trigger, then surround with (?:).
+  if (/[*?+\\\[\]{}\^$()|]/.test(pattern)) return new RegExp(pattern);
+  return pattern;
+}
+
+function matchPattern(pattern, str) {
+  if (pattern instanceof RegExp) {
+    return pattern.exec(str);
+  } else {
+    return pattern == str ? [str] : null;
+  }
 }
 
 // Override constructor, to add new fields and options.
@@ -49,10 +66,11 @@ function DynamicServer(srv, opts) {
 
   this.cleanupTimer = null;
   this.cleanupTime = null;
-  this.namespaceSetup = {};
+  this.namespaceNames = {};
+  this.namespacePatterns = [];
 
   // By default, serve all hosts as if they are the main host.
-  this.mainHost = options.mainHost || '*';
+  this.mainHost = makePattern(options.mainHost || '*');
 
   // By default, retire automatically created namespaces in 10 seconds.
   this.defaultRetirement = options.retirement || 10000;
@@ -66,19 +84,29 @@ util.inherits(DynamicServer, IOServer)
 exports.DynamicServer = DynamicServer;
 
 // This is the setup for initializing dynamic namespaces.
-DynamicServer.prototype.setupNamespace = function(pattern, fn) {
-  this.namespaceSetup[pattern] = fn;
+DynamicServer.prototype.setupNamespace = function(name, fn) {
+  var pattern = makePattern(name);
+  if (pattern instanceof RegExp) {
+    this.namespacePatterns.push({pattern: pattern, setup: fn});
+  } else {
+    this.namespaceNames[name] = fn;
+  }
   // If there is a matching namespace already, then set it up.
-  if (pattern == '*' || this.nsps[pattern]) {
-    for (var j in this.nsps) {
-      if (this.nsps.hasOwnProperty(j) && (pattern == j ||
-          (pattern == '*' && !this.namespaceSetup.hasOwnProperty(j)))) {
-        var nsp = this.nsps[j];
-        fn(nsp);
+  for (var j in this.nsps) {
+    if (this.nsps.hasOwnProperty(j)) {
+      var nsp = this.nsps[j];
+      if (!nsp.setupDone && !!(match = matchPattern(pattern, j))) {
+        nsp.setupDone = -1;
+        if (false === fn.apply(this, [nsp, match])) {
+          // If setup is aborted, mark it as not-setup.
+          nsp.setupDone = 0;
+        } else {
+          nsp.setupDone = 1;
+        }
       }
     }
   }
-}
+};
 
 // Create DynamicClient instead of IOClient when there is a connection.
 DynamicServer.prototype.onconnection = function(conn) {
@@ -90,20 +118,34 @@ DynamicServer.prototype.onconnection = function(conn) {
 
 // Allow users to override this in order to normalize hostnames.
 DynamicServer.prototype.getHost = function(conn) {
-  if (this.mainHost == '*' ||
-      conn.request.headers.host == this.mainHost) return null;
+  if (matchPattern(this.mainHost, conn.request.headers.host)) {
+    // The main host gets nulled out.
+    return null;
+  }
   return conn.request.headers.host;
-}
+};
 
 // Do the work of initializing a namespace when it is needed.
 DynamicServer.prototype.initializeNamespace = function(name, host, auto) {
   // First, look up our instructions for this namespace.
   var fullname = fullNamespaceName(name, host);
-  var setup = this.namespaceSetup[fullname] || this.namespaceSetup['*'];
-
-  // Without a matching setupNamespace, this function returns
-  // null, and use of the namespace is ignored.
-  if (!setup && fullname != '/') { return null; }
+  var setup, match;
+  if (this.namespaceNames.hasOwnProperty(fullname)) {
+    // Prefer exact matches over pattern matches.
+    setup = this.namespaceNames[fullname];
+    match = [fullname];
+  } else for (var j = this.namespacePatterns.length - 1; j >= 0; --j) {
+    // Scan patterns starting with the last one registered.
+    match = matchPattern(this.namespacePatterns[j].pattern, exec(fullname));
+    if (match) {
+      setup = this.namespacePatterns[j].setup;
+      break;
+    }
+  }
+  // Automatically created namespaces require setup.
+  if (auto && !setup) {
+    return null;
+  }
 
   // Create a namespace, register it, and call setup.
   var nsp = new DynamicNamespace(this, name, host);
@@ -113,14 +155,19 @@ DynamicServer.prototype.initializeNamespace = function(name, host, auto) {
   }
   this.nsps[fullname] = nsp;
   if (setup) {
-    if (false === setup.apply(this, [nsp])) {
+    // During setup, setupDone is -1.
+    nsp.setupDone = -1;
+    if (false === setup.apply(this, [nsp, match])) {
       // If setup returns false, undo the operation and return null.
       delete this.nsps[fullname];
       return null;
+    } else {
+      // After setup, setupDone is 1.
+      nsp.setupDone = 1;
     }
   }
   return nsp;
-}
+};
 
 // When namespaces are emptied, they ask the server to poll
 // them back for expiration.
@@ -225,7 +272,7 @@ DynamicServer.prototype.attachServe = function(srv) {
 DynamicServer.prototype.serveStatus = function(req, res) {
   debug('serve status');
   var match = '*';
-  if (this.mainHost != '*' && this.mainHost != req.headers.host) {
+  if (!matchPattern(this.mainHost, req.headers.host)) {
     match = req.headers.host;
   }
 
@@ -282,7 +329,7 @@ DynamicServer.prototype.serveStatus = function(req, res) {
   res.setHeader('Content-Type', 'text/html');
   res.writeHead(200);
   res.end(html.join('\n'));
-}
+};
 
 // This subclass relies on "of" to make a namespace.
 function DynamicClient(server, conn, host) {
@@ -296,7 +343,10 @@ exports.DynamicClient = DynamicClient;
 DynamicClient.prototype.connect = function(name) {
   debug('connecting to namespace %s (%s)', name, this.host);
   var nsp = this.server.of(name, this.host, true);
-  if (nsp == null) return;
+  if (nsp == null) {
+    this.packet({ type: parser.ERROR, nsp: name, data : 'Invalid namespace'});
+    return;
+  }
   if (name != '/' && !this.nsps['/']) {
     this.connectBuffer.push(name);
     return;
@@ -319,6 +369,8 @@ function DynamicNamespace(server, name, host) {
   IONamespace.apply(this, arguments);
   // Remember the host name.
   this.host = host;
+  // Only call setup once.
+  this.setupDone = 0;
   // Default retirement is "Infinity", but will be reduced to 10s
   // for dynamically created namespaces.
   this.retirement = Infinity;
@@ -347,20 +399,22 @@ DynamicNamespace.prototype.remove = function(socket) {
 // Concatenate host and name for the full namespace name.
 DynamicNamespace.prototype.fullname = function() {
   return fullNamespaceName(this.name, this.host);
-}
+};
 
 // After there are no sockets, each namespace has an
 // expiration time.
 DynamicNamespace.prototype.expiration = function() {
   if (this.sockets.length) return Infinity;
   return this.expirationTime;
-}
+};
 
 // When we have a socket added, we are no longer in retirement,
 // so reset our expirationTime.  Back in business!
 DynamicNamespace.prototype.add = function() {
   this.expirationTime = Infinity;
   return IONamespace.prototype.add.apply(this, arguments);
-}
+};
+
+exports.DynamicSocket = IOSocket;
 
 module.exports = exports;

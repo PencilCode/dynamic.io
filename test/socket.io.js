@@ -19,10 +19,10 @@ function client(srv, nsp, opts){
   return ioc(url, opts);
 }
 
-describe('socket.io', function(){
+describe('dynamic.io', function(){
 
-  it('should be the same version as client', function(){
-    var version = require('../package').version;
+  it('should use the same scoket.io version as client', function(){
+    var version = require('socket.io/package').version;
     expect(version).to.be(require('socket.io-client/package').version);
   });
 
@@ -273,7 +273,7 @@ describe('socket.io', function(){
 
     it('should allow request when origin defined as function and same is supplied', function(done) {
       var sockets = io({ origins: function(origin,callback){
-        if(origin == 'http://foo.example') 
+        if(origin == 'http://foo.example')
           return callback(null, true);
         return callback(null, false);
       } }).listen('54016');
@@ -288,7 +288,7 @@ describe('socket.io', function(){
 
     it('should allow request when origin defined as function and different is supplied', function(done) {
       var sockets = io({ origins: function(origin,callback){
-        if(origin == 'http://foo.example') 
+        if(origin == 'http://foo.example')
           return callback(null, true);
         return callback(null, false);
       } }).listen('54017');
@@ -361,8 +361,8 @@ describe('socket.io', function(){
   });
 
   describe('namespaces', function(){
-    var Socket = require('../lib/socket');
-    var Namespace = require('../lib/namespace');
+    var Socket = io.DynamicSocket;
+    var Namespace = io.DynamicNamespace;
 
     it('should be accessible through .sockets', function(){
       var sio = io();
@@ -445,7 +445,7 @@ describe('socket.io', function(){
       var c1 = client(srv, '/');
       var c2 = client(srv, '/abc');
     });
-    
+
     it('should be equivalent for "" and "/" on client', function(done){
       var srv = http();
       var sio = io(srv);
@@ -454,7 +454,7 @@ describe('socket.io', function(){
       });
       var c1 = client(srv, '');
     });
-    
+
     it('should work with `of` and many sockets', function(done){
       var srv = http();
       var sio = io(srv);
@@ -1353,7 +1353,7 @@ describe('socket.io', function(){
   });
 
   describe('middleware', function(done){
-    var Socket = require('../lib/socket');
+    var Socket = io.DynamicSocket;
 
     it('should call functions', function(done){
       var srv = http();
